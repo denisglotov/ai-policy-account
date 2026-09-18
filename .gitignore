@@ -18,7 +18,6 @@ docs/
 .env
 .env.*
 !.env.example
-.github/
 
 # Node
 node_modules/
