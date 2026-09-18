@@ -91,49 +91,31 @@ and an off-chain AI-Oracle ECDSA signature approving store receipts/invoices.
 - [Foundry](https://getfoundry.sh/) (`forge`, `cast`, `anvil`)
 - [Node.js](https://nodejs.org/) (v18+)
 
-### 1. Clone & Initialize Submodules
-
-When cloning the repository fresh:
-```bash
-git clone --recurse-submodules <repo_url>
-cd Cifra-Ruble-backend
-```
-
-If already cloned, initialize and fetch all submodules:
-```bash
-git submodule update --init --recursive
-```
-
-To pull the latest updates for all submodules:
-```bash
-git submodule update --remote --recursive
-```
-
-### 2. Install Node Dependencies
+### 1. Install Dependencies
 ```bash
 npm install
 ```
 
-### 3. Compile Contracts
+### 2. Compile Contracts
 ```bash
 forge build
 # or
 npm run build
 ```
 
-### 4. Run Tests
+### 3. Run Tests
 ```bash
 forge test -vvv
 # or
 npm test
 ```
 
-### 5. Code Coverage
+### 4. Code Coverage
 ```bash
 forge coverage
 ```
 
-### 6. Linting & Formatting
+### 5. Linting & Formatting
 ```bash
 # Check Foundry code formatting
 npm run format:check

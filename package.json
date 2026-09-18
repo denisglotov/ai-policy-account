@@ -12,6 +12,9 @@
     "format:check": "forge fmt --check"
   },
   "devDependencies": {
+    "@account-abstraction/contracts": "^0.7.0",
+    "@openzeppelin/contracts": "^5.2.0",
+    "forge-std": "github:foundry-rs/forge-std#v1.16.2",
     "solhint": "^6.2.4"
   },
   "license": "MIT"
