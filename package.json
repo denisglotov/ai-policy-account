@@ -5,17 +5,28 @@
   "scripts": {
     "build": "forge build",
     "test": "forge test",
-    "lint": "solhint 'src/**/*.sol' 'script/**/*.sol'",
-    "lint:all": "solhint 'src/**/*.sol' 'test/**/*.sol' 'script/**/*.sol'",
-    "lint:fix": "solhint --fix 'src/**/*.sol' 'script/**/*.sol'",
+    "test:e2e": "tsx test/e2e/userOpSuccess.test.ts",
+    "typecheck": "tsc --noEmit",
+    "lint:sol": "solhint 'src/**/*.sol' 'test/**/*.sol' 'script/**/*.sol'",
+    "lint:ts": "eslint 'test/**/*.ts'",
+    "lint": "npm run lint:sol && npm run lint:ts && npm run typecheck",
+    "lint:all": "npm run lint:sol && npm run lint:ts && npm run typecheck",
+    "lint:fix": "solhint --fix --noPrompt 'src/**/*.sol' 'script/**/*.sol' && eslint --fix 'test/**/*.ts'",
     "format": "forge fmt",
     "format:check": "forge fmt --check"
   },
   "devDependencies": {
     "@account-abstraction/contracts": "^0.7.0",
+    "@eslint/js": "^10.0.1",
     "@openzeppelin/contracts": "^5.2.0",
+    "@types/node": "^22.13.9",
+    "eslint": "^10.10.0",
     "forge-std": "github:foundry-rs/forge-std#v1.16.2",
-    "solhint": "^6.2.4"
+    "solhint": "^6.2.4",
+    "tsx": "^4.19.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.0",
+    "viem": "^2.23.12"
   },
   "license": "MIT"
 }
