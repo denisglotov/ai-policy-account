@@ -1,0 +1,17 @@
+{
+  "extends": "solhint:recommended",
+  "rules": {
+    "compiler-version": ["error", ">=0.8.20"],
+    "func-visibility": ["warn", { "ignoreConstructors": true }],
+    "no-empty-blocks": "error",
+    "no-unused-vars": "error",
+    "const-name-snakecase": "error",
+    "func-name-mixedcase": "error",
+    "var-name-mixedcase": "error",
+    "reason-string": "off",
+    "ordering": "warn",
+    "import-path-check": "off",
+    "immutable-vars-naming": "off",
+    "gas-small-strings": "off"
+  }
+}
