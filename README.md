@@ -54,8 +54,12 @@ and an off-chain AI-Oracle ECDSA signature approving store receipts/invoices.
    - **AI-Oracle**: Signs an EIP-712 typed digest:
      `OracleApproval(bytes32 userOpHash, bytes32 receiptHash, uint48 validUntil, uint48 validAfter)`
 3. **On-Chain Nullifier Tracking**:
-   Each `receiptHash` can only be redeemed once via `usedReceipts[receiptHash] = true`. Replay
-   attempts revert on-chain.
+   Each `receiptHash` can only be redeemed once via `usedReceipts[receiptHash] = true` during
+   `validateUserOp`. This provides atomic single-use protection, mempool simulation safety, and
+   unrestricted multi-op bundling. If execution subsequently reverts (e.g., target merchant fails),
+   the nullifier remains consumed; it is the AI-Oracle's duty to detect execution failure (via
+   EntryPoint `UserOperationEvent`) and sign an approval with an incremented attempt counter or
+   new receipt hash for retries.
 4. **Strict EntryPoint-Only Execution**:
    `execute()` and `executeBatch()` are restricted strictly to `msg.sender == entryPoint()`. No
    unauthorized direct calls can bypass the AI-Oracle policy.

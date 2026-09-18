@@ -44,6 +44,12 @@ contract PolicyAccount is EIP712, IPolicyAccount {
     // =============================================================
 
     /// @notice Records whether a store receipt hash has already been consumed.
+    /// @dev Nullifiers are marked as used during `validateUserOp` to guarantee atomic single-use
+    ///      protection and prevent replay/mempool griefing in ERC-4337.
+    ///      If execution subsequently reverts on-chain (e.g. merchant failure), this nullifier
+    ///      remains consumed on-chain. It is the AI-Oracle's duty to monitor execution status
+    ///      (via EntryPoint's UserOperationEvent) and re-issue a signature with an incremented
+    ///      attempt/retry counter (or new receiptHash) if a retry is warranted.
     mapping(bytes32 receiptHash => bool isUsed) public usedReceipts;
 
     // =============================================================
@@ -123,6 +129,12 @@ contract PolicyAccount is EIP712, IPolicyAccount {
         }
 
         // 3. Mark receipt nullifier as consumed
+        // Note: Consuming the receipt nullifier in validateUserOp guarantees atomic single-use
+        // authorization, eliminates mempool simulation griefing, and keeps validation decoupled
+        // from execution. If the downstream call in execute/executeBatch reverts on-chain,
+        // this nullifier remains consumed; it is the AI-Oracle's duty to monitor execution status
+        // (via EntryPoint's UserOperationEvent) and issue an approval with an incremented attempt
+        // counter or fresh receipt hash if a retry is warranted.
         usedReceipts[receiptHash] = true;
         emit PurchaseApproved(receiptHash, userOpHash);
 

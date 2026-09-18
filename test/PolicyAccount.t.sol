@@ -244,6 +244,114 @@ contract PolicyAccountTest is Test {
         entryPoint.handleOps(ops2, beneficiary);
     }
 
+    function test_UserOp_MultiOpBundle_SameAccount_Success() public {
+        bytes32 receiptHash1 = keccak256("RECEIPT_BUNDLE_1");
+        bytes32 receiptHash2 = keccak256("RECEIPT_BUNDLE_2");
+
+        uint48 validUntil = uint48(block.timestamp + 1 hours);
+        uint48 validAfter = 0;
+
+        // Op 0: Nonce 0
+        bytes memory callData0 =
+            abi.encodeWithSelector(PolicyAccount.execute.selector, address(merchant), 0.5 ether, "");
+        PackedUserOperation memory userOp0 = _createBaseUserOp(callData0);
+        bytes32 userOpHash0 = entryPoint.getUserOpHash(userOp0);
+        bytes memory ownerSig0 = _signOwner(ownerPrivateKey, userOpHash0);
+        bytes memory oracleSig0 = _signOracle(oraclePrivateKey, userOpHash0, receiptHash1, validUntil, validAfter);
+        userOp0.signature = abi.encode(ownerSig0, oracleSig0, receiptHash1, validUntil, validAfter);
+
+        // Op 1: Nonce 1
+        bytes memory callData1 =
+            abi.encodeWithSelector(PolicyAccount.execute.selector, address(merchant), 0.3 ether, "");
+        PackedUserOperation memory userOp1 = _createBaseUserOp(callData1);
+        userOp1.nonce = 1;
+        bytes32 userOpHash1 = entryPoint.getUserOpHash(userOp1);
+        bytes memory ownerSig1 = _signOwner(ownerPrivateKey, userOpHash1);
+        bytes memory oracleSig1 = _signOracle(oraclePrivateKey, userOpHash1, receiptHash2, validUntil, validAfter);
+        userOp1.signature = abi.encode(ownerSig1, oracleSig1, receiptHash2, validUntil, validAfter);
+
+        PackedUserOperation[] memory ops = new PackedUserOperation[](2);
+        ops[0] = userOp0;
+        ops[1] = userOp1;
+
+        uint256 merchantBalanceBefore = address(merchant).balance;
+        entryPoint.handleOps(ops, beneficiary);
+
+        assertEq(address(merchant).balance, merchantBalanceBefore + 0.8 ether);
+        assertTrue(account.usedReceipts(receiptHash1));
+        assertTrue(account.usedReceipts(receiptHash2));
+    }
+
+    function test_UserOp_RetryFlow_OracleIssuesNewAttemptReceipt_AfterExecutionFailure() public {
+        // Attempt 1: Calls a failing function on MockMerchant
+        bytes32 baseReceiptId = keccak256("STORE_RECEIPT_1001");
+        bytes32 receiptHashAttempt1 = keccak256(abi.encode(baseReceiptId, uint32(1)));
+
+        bytes memory callDataFail = abi.encodeWithSelector(
+            PolicyAccount.execute.selector, address(merchant), 0, abi.encodeWithSelector(MockMerchant.fail.selector)
+        );
+
+        uint48 validUntil = uint48(block.timestamp + 1 hours);
+        uint48 validAfter = 0;
+
+        PackedUserOperation memory userOp1 = _createBaseUserOp(callDataFail);
+        bytes32 userOpHash1 = entryPoint.getUserOpHash(userOp1);
+        bytes memory ownerSig1 = _signOwner(ownerPrivateKey, userOpHash1);
+        bytes memory oracleSig1 =
+            _signOracle(oraclePrivateKey, userOpHash1, receiptHashAttempt1, validUntil, validAfter);
+        userOp1.signature = abi.encode(ownerSig1, oracleSig1, receiptHashAttempt1, validUntil, validAfter);
+
+        PackedUserOperation[] memory ops1 = new PackedUserOperation[](1);
+        ops1[0] = userOp1;
+
+        // EntryPoint emits UserOperationRevertReason and UserOperationEvent(success: false)
+        vm.expectEmit(true, true, false, true, address(entryPoint));
+        emit IEntryPoint.UserOperationRevertReason(
+            userOpHash1,
+            address(account),
+            0,
+            abi.encodeWithSelector(
+                IPolicyAccount.PolicyAccount__CallFailed.selector, abi.encodeWithSignature("Error(string)", "MOCK_FAIL")
+            )
+        );
+        entryPoint.handleOps(ops1, beneficiary);
+
+        // Attempt 1's nullifier is marked as consumed on-chain
+        assertTrue(account.usedReceipts(receiptHashAttempt1));
+
+        // It is the Oracle's duty to detect execution failure (via UserOperationEvent)
+        // and issue a fresh approval for Attempt 2 with an incremented attempt counter:
+        bytes32 receiptHashAttempt2 = keccak256(abi.encode(baseReceiptId, uint32(2)));
+        assertFalse(account.usedReceipts(receiptHashAttempt2));
+
+        bytes32 orderId = keccak256("ORDER_RETRY_SUCCESS");
+        bytes memory callDataSuccess = abi.encodeWithSelector(
+            PolicyAccount.execute.selector,
+            address(merchant),
+            1 ether,
+            abi.encodeWithSelector(MockMerchant.buy.selector, orderId)
+        );
+
+        PackedUserOperation memory userOp2 = _createBaseUserOp(callDataSuccess);
+        // Nonce is incremented to 1
+        userOp2.nonce = entryPoint.getNonce(address(account), 0);
+        assertEq(userOp2.nonce, 1);
+
+        bytes32 userOpHash2 = entryPoint.getUserOpHash(userOp2);
+        bytes memory ownerSig2 = _signOwner(ownerPrivateKey, userOpHash2);
+        bytes memory oracleSig2 =
+            _signOracle(oraclePrivateKey, userOpHash2, receiptHashAttempt2, validUntil, validAfter);
+        userOp2.signature = abi.encode(ownerSig2, oracleSig2, receiptHashAttempt2, validUntil, validAfter);
+
+        PackedUserOperation[] memory ops2 = new PackedUserOperation[](1);
+        ops2[0] = userOp2;
+
+        entryPoint.handleOps(ops2, beneficiary);
+
+        assertEq(address(merchant).balance, 1 ether);
+        assertTrue(account.usedReceipts(receiptHashAttempt2));
+    }
+
     function test_UserOp_RevertIf_ZeroReceiptHash() public {
         bytes memory callData = abi.encodeWithSelector(PolicyAccount.execute.selector, address(merchant), 1 ether, "");
 

@@ -52,6 +52,9 @@ interface IPolicyAccount is IAccount, IERC1271 {
     error PolicyAccount__OnlyEntryPoint();
 
     /// @notice Thrown when attempting to use a receipt hash that has already been consumed.
+    /// @dev If a transaction reverts during execution, the receipt hash remains consumed on-chain.
+    ///      It is the AI-Oracle's duty to detect execution failure and issue a new approval
+    ///      with an incremented attempt counter or fresh receipt hash if a retry is warranted.
     error PolicyAccount__ReceiptAlreadyUsed(bytes32 receiptHash);
 
     /// @notice Thrown when the provided receipt hash is zero.
