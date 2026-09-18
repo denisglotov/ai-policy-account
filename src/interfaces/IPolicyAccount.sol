@@ -3,23 +3,38 @@ pragma solidity 0.8.24;
 
 import {IAccount} from "account-abstraction/interfaces/IAccount.sol";
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
+import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 
 /**
  * @title IPolicyAccount
- * @author Cifra Ruble Team
+ * @author Denis Glotov
  * @notice Interface for PolicyAccount smart contract wallet requiring AI-Oracle approval.
  */
-interface IPolicyAccount is IAccount {
+interface IPolicyAccount is IAccount, IERC1271 {
     // =============================================================
     //                           EVENTS
     // =============================================================
 
     /**
-     * @notice Emitted when a purchase is approved and its receipt hash is consumed.
+     * @notice Emitted when a purchase is approved and its receipt hash is consumed during validation.
      * @param receiptHash The unique hash of the purchase receipt.
      * @param userOpHash The hash of the validated UserOperation.
      */
     event PurchaseApproved(bytes32 indexed receiptHash, bytes32 indexed userOpHash);
+
+    /**
+     * @notice Emitted when a single call executes successfully from the account.
+     * @param dest Recipient contract or EOA.
+     * @param value Native currency amount sent.
+     * @param func Calldata payload sent.
+     */
+    event ExecutionSuccess(address indexed dest, uint256 indexed value, bytes func);
+
+    /**
+     * @notice Emitted when a batch of calls completes successfully.
+     * @param totalCalls Total number of calls executed in the batch.
+     */
+    event BatchExecutionSuccess(uint256 indexed totalCalls);
 
     /**
      * @notice Emitted when the account is deployed and initialized.

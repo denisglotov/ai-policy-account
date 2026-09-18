@@ -9,7 +9,7 @@ import {PolicyAccount} from "../src/PolicyAccount.sol";
 
 /**
  * @title DeployPolicyAccount
- * @author Cifra Ruble Team
+ * @author Denis Glotov
  * @notice Foundry deployment script for PolicyAccount smart contract wallet.
  */
 contract DeployPolicyAccount is Script {
@@ -22,9 +22,16 @@ contract DeployPolicyAccount is Script {
      */
     function run() external returns (PolicyAccount account) {
         address entryPointAddr = vm.envOr("ENTRY_POINT", CANONICAL_ENTRY_POINT_V07);
-        address ownerAddr = vm.envOr("OWNER_ADDRESS", msg.sender);
         address oracleAddr = vm.envAddress("ORACLE_ADDRESS");
+        address ownerConfig = vm.envOr("OWNER_ADDRESS", address(0));
         uint256 initialFunding = vm.envOr("INITIAL_FUNDING", uint256(0));
+        uint256 deployerPrivateKey = vm.envOr("PRIVATE_KEY", uint256(0));
+
+        // Determine deployer address: derive from private key if provided, else from caller
+        address deployer = deployerPrivateKey != 0 ? vm.addr(deployerPrivateKey) : msg.sender;
+
+        // Owner defaults to deployer if OWNER_ADDRESS is unset
+        address ownerAddr = ownerConfig != address(0) ? ownerConfig : deployer;
 
         console2.log("--- Deploying PolicyAccount ---");
         console2.log("EntryPoint:", entryPointAddr);
@@ -32,7 +39,11 @@ contract DeployPolicyAccount is Script {
         console2.log("Oracle:    ", oracleAddr);
         console2.log("Funding:   ", initialFunding);
 
-        vm.startBroadcast();
+        if (deployerPrivateKey != 0) {
+            vm.startBroadcast(deployerPrivateKey);
+        } else {
+            vm.startBroadcast();
+        }
 
         account = new PolicyAccount{value: initialFunding}(IEntryPoint(entryPointAddr), ownerAddr, oracleAddr);
 

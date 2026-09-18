@@ -7,11 +7,12 @@ import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/Messa
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 import {SIG_VALIDATION_FAILED, _packValidationData} from "account-abstraction/core/Helpers.sol";
+import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import {IPolicyAccount} from "./interfaces/IPolicyAccount.sol";
 
 /**
  * @title PolicyAccount
- * @author Cifra Ruble Team
+ * @author Denis Glotov
  * @notice ERC-4337 Smart Account wallet requiring cryptographic AI-Oracle ECDSA approval.
  * @dev Enforces dual-signature verification (Owner + AI-Oracle) inside validateUserOp,
  * single-use receipt nullification, and strict EntryPoint-only execution.
@@ -159,6 +160,8 @@ contract PolicyAccount is EIP712, IPolicyAccount {
         if (!success) {
             revert PolicyAccount__CallFailed(result);
         }
+
+        emit ExecutionSuccess(dest, value, func);
     }
 
     /**
@@ -184,11 +187,41 @@ contract PolicyAccount is EIP712, IPolicyAccount {
                 revert PolicyAccount__CallFailed(result);
             }
         }
+
+        emit BatchExecutionSuccess(length);
     }
 
     // =============================================================
     //                       VIEW FUNCTIONS
     // =============================================================
+
+    /**
+     * @inheritdoc IERC1271
+     * @notice Validates an ERC-1271 signature for off-chain message verification.
+     * @dev Supports both EIP-191 personal_sign hashes and raw EIP-712 digests signed by the account owner.
+     * @param hash The 32-byte hash of the data being verified.
+     * @param signature The signature bytes associated with `hash`.
+     * @return magicValue 0x1626ba7e if valid, 0xffffffff otherwise.
+     */
+    function isValidSignature(bytes32 hash, bytes calldata signature)
+        external
+        view
+        override
+        returns (bytes4 magicValue)
+    {
+        bytes32 ethSignedHash = MessageHashUtils.toEthSignedMessageHash(hash);
+        (address recovered, ECDSA.RecoverError err,) = ECDSA.tryRecoverCalldata(ethSignedHash, signature);
+        if (err == ECDSA.RecoverError.NoError && recovered == _owner) {
+            return IERC1271.isValidSignature.selector;
+        }
+
+        (recovered, err,) = ECDSA.tryRecoverCalldata(hash, signature);
+        if (err == ECDSA.RecoverError.NoError && recovered == _owner) {
+            return IERC1271.isValidSignature.selector;
+        }
+
+        return 0xffffffff;
+    }
 
     /**
      * @inheritdoc IPolicyAccount

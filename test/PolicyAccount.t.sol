@@ -8,6 +8,7 @@ import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOper
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {PolicyAccount} from "../src/PolicyAccount.sol";
 import {IPolicyAccount} from "../src/interfaces/IPolicyAccount.sol";
+import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 
 contract MockMerchant {
     event PurchaseReceived(address indexed payer, uint256 amount, bytes32 orderId);
@@ -148,6 +149,11 @@ contract PolicyAccountTest is Test {
 
         vm.expectEmit(true, false, false, true, address(merchant));
         emit MockMerchant.PurchaseReceived(address(account), 1 ether, orderId);
+
+        vm.expectEmit(true, true, false, true, address(account));
+        emit IPolicyAccount.ExecutionSuccess(
+            address(merchant), 1 ether, abi.encodeWithSelector(MockMerchant.buy.selector, orderId)
+        );
 
         entryPoint.handleOps(ops, beneficiary);
 
@@ -340,6 +346,9 @@ contract PolicyAccountTest is Test {
         PackedUserOperation[] memory ops = new PackedUserOperation[](1);
         ops[0] = userOp;
 
+        vm.expectEmit(true, false, false, false, address(account));
+        emit IPolicyAccount.BatchExecutionSuccess(2);
+
         entryPoint.handleOps(ops, beneficiary);
 
         assertEq(address(merchant).balance, 0.5 ether);
@@ -492,6 +501,70 @@ contract PolicyAccountTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(IEntryPoint.FailedOpWithRevert.selector, 0, "AA23 reverted", hex""));
         entryPoint.handleOps(ops, beneficiary);
+    }
+
+    // =============================================================
+    //                 EXECUTION EVENT TESTS
+    // =============================================================
+
+    function test_Execute_Emits_ExecutionSuccess_Direct() public {
+        vm.prank(address(entryPoint));
+        vm.expectEmit(true, true, false, true, address(account));
+        emit IPolicyAccount.ExecutionSuccess(address(merchant), 1 ether, "");
+        account.execute(address(merchant), 1 ether, "");
+    }
+
+    function test_ExecuteBatch_Emits_BatchExecutionSuccess_Direct() public {
+        address[] memory dests = new address[](1);
+        dests[0] = address(merchant);
+        uint256[] memory values = new uint256[](1);
+        values[0] = 1 ether;
+        bytes[] memory funcs = new bytes[](1);
+        funcs[0] = "";
+
+        vm.prank(address(entryPoint));
+        vm.expectEmit(true, false, false, false, address(account));
+        emit IPolicyAccount.BatchExecutionSuccess(1);
+        account.executeBatch(dests, values, funcs);
+    }
+
+    // =============================================================
+    //                    ERC-1271 TESTS
+    // =============================================================
+
+    function test_IsValidSignature_Success_EthSignedMessageHash() public view {
+        bytes32 messageHash = keccak256("SIWE_OR_OFFCHAIN_MESSAGE");
+        bytes32 ethSignedDigest = MessageHashUtils.toEthSignedMessageHash(messageHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, ethSignedDigest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        bytes4 magicValue = account.isValidSignature(messageHash, signature);
+        assertEq(magicValue, IERC1271.isValidSignature.selector);
+    }
+
+    function test_IsValidSignature_Success_RawHash() public view {
+        bytes32 rawDigest = keccak256("EIP712_TYPED_DATA_DIGEST");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, rawDigest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        bytes4 magicValue = account.isValidSignature(rawDigest, signature);
+        assertEq(magicValue, IERC1271.isValidSignature.selector);
+    }
+
+    function test_IsValidSignature_Failed_AttackerSignature() public view {
+        bytes32 messageHash = keccak256("OFFCHAIN_MESSAGE");
+        bytes32 ethSignedDigest = MessageHashUtils.toEthSignedMessageHash(messageHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(attackerPrivateKey, ethSignedDigest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        bytes4 magicValue = account.isValidSignature(messageHash, signature);
+        assertEq(magicValue, bytes4(0xffffffff));
+    }
+
+    function test_IsValidSignature_Failed_InvalidLength() public view {
+        bytes32 messageHash = keccak256("OFFCHAIN_MESSAGE");
+        bytes4 magicValue = account.isValidSignature(messageHash, hex"deadbeef");
+        assertEq(magicValue, bytes4(0xffffffff));
     }
 
     // =============================================================

@@ -4,8 +4,6 @@ An ERC-4337 (v0.7) compliant Smart Account wallet ("PolicyAccount") implemented 
 using Foundry. Execution requires dual cryptographic verification: the account owner's signature
 and an off-chain AI-Oracle ECDSA signature approving store receipts/invoices.
 
----
-
 ## Architecture Overview
 
 ```
@@ -65,25 +63,6 @@ and an off-chain AI-Oracle ECDSA signature approving store receipts/invoices.
    All revert conditions use explicit custom errors (`PolicyAccount__ReceiptAlreadyUsed`,
    `PolicyAccount__OnlyEntryPoint`, `PolicyAccount__InvalidReceiptHash`, etc.).
 
----
-
-## Project Structure
-
-```
-├── src/
-│   ├── interfaces/
-│   │   └── IPolicyAccount.sol    # Account interface, custom errors, and events
-│   └── PolicyAccount.sol         # Core smart contract implementation
-├── test/
-│   └── PolicyAccount.t.sol       # 22 unit, integration, and security tests
-├── script/
-│   └── DeployPolicyAccount.s.sol # Foundry deployment and broadcast script
-├── foundry.toml                  # Foundry compiler (v0.8.24) and via-IR settings
-├── package.json                  # Solhint and workflow scripts
-└── .solhint.json                 # Solidity linter configuration
-```
-
----
 
 ## Quickstart
 
@@ -127,22 +106,22 @@ npm run format
 npm run lint
 ```
 
----
-
 ## Deployment
 
-Deploy a `PolicyAccount` instance via Foundry script:
+Deploy a `PolicyAccount` instance via Foundry script using `.env`:
 
+1. Copy the example environment template and configure parameters:
 ```bash
-export RPC_URL="<your_rpc_url>"
-export PRIVATE_KEY="<deployer_private_key>"
-export ORACLE_ADDRESS="<ai_oracle_signer_address>"
-export OWNER_ADDRESS="<account_owner_address>" # optional, defaults to deployer
-export ENTRY_POINT="0x0000000071727De22E5E9d8BAf0edAc6f37da032" # optional, defaults to v0.7
-export INITIAL_FUNDING="0" # optional in wei
+cp .env.example .env
+# Edit .env with your ORACLE_ADDRESS, PRIVATE_KEY, and RPC_URL
+```
 
-forge script script/DeployPolicyAccount.s.sol \
-  --rpc-url $RPC_URL \
-  --private-key $PRIVATE_KEY \
-  --broadcast
+2. Run the deployment script:
+```bash
+forge script script/DeployPolicyAccount.s.sol --broadcast
+```
+
+Or specify an RPC URL explicitly:
+```bash
+forge script script/DeployPolicyAccount.s.sol --rpc-url $RPC_URL --broadcast
 ```
