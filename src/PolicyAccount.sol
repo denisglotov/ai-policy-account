@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.24;
+pragma solidity 0.8.37;
 
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -52,9 +52,7 @@ contract PolicyAccount is EIP712, IPolicyAccount {
 
     /// @notice Restricts invocation strictly to the EntryPoint contract.
     modifier onlyEntryPoint() {
-        if (msg.sender != address(_entryPoint)) {
-            revert PolicyAccount__OnlyEntryPoint();
-        }
+        require(msg.sender == address(_entryPoint), PolicyAccount__OnlyEntryPoint());
         _;
     }
 
@@ -69,9 +67,10 @@ contract PolicyAccount is EIP712, IPolicyAccount {
      * @param anOracle The AI-Oracle signer address.
      */
     constructor(IEntryPoint anEntryPoint, address anOwner, address anOracle) payable EIP712("PolicyAccount", "1") {
-        if (address(anEntryPoint) == address(0) || anOwner == address(0) || anOracle == address(0)) {
-            revert PolicyAccount__ZeroAddressNotAllowed();
-        }
+        require(
+            address(anEntryPoint) != address(0) && anOwner != address(0) && anOracle != address(0),
+            PolicyAccount__ZeroAddressNotAllowed()
+        );
         _entryPoint = anEntryPoint;
         _owner = anOwner;
         _oracle = anOracle;
@@ -100,22 +99,14 @@ contract PolicyAccount is EIP712, IPolicyAccount {
     function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
         external
         override
+        onlyEntryPoint
         returns (uint256 validationData)
     {
-        if (msg.sender != address(_entryPoint)) {
-            revert PolicyAccount__OnlyEntryPoint();
-        }
-
         (bytes memory ownerSig, bytes memory oracleSig, bytes32 receiptHash, uint48 validUntil, uint48 validAfter) =
             abi.decode(userOp.signature, (bytes, bytes, bytes32, uint48, uint48));
 
-        if (receiptHash == bytes32(0)) {
-            revert PolicyAccount__InvalidReceiptHash();
-        }
-
-        if (usedReceipts[receiptHash]) {
-            revert PolicyAccount__ReceiptAlreadyUsed(receiptHash);
-        }
+        require(receiptHash != bytes32(0), PolicyAccount__InvalidReceiptHash());
+        require(!usedReceipts[receiptHash], PolicyAccount__ReceiptAlreadyUsed(receiptHash));
 
         // 1. Verify owner signature against ERC-4337 userOpHash
         bytes32 ownerDigest = MessageHashUtils.toEthSignedMessageHash(userOpHash);
@@ -152,14 +143,10 @@ contract PolicyAccount is EIP712, IPolicyAccount {
      * @inheritdoc IPolicyAccount
      */
     function execute(address dest, uint256 value, bytes calldata func) external override onlyEntryPoint {
-        if (dest == address(0)) {
-            revert PolicyAccount__ZeroAddressNotAllowed();
-        }
+        require(dest != address(0), PolicyAccount__ZeroAddressNotAllowed());
 
         (bool success, bytes memory result) = dest.call{value: value}(func);
-        if (!success) {
-            revert PolicyAccount__CallFailed(result);
-        }
+        require(success, PolicyAccount__CallFailed(result));
 
         emit ExecutionSuccess(dest, value, func);
     }
@@ -173,19 +160,13 @@ contract PolicyAccount is EIP712, IPolicyAccount {
         onlyEntryPoint
     {
         uint256 length = dest.length;
-        if (length != value.length || length != func.length) {
-            revert PolicyAccount__ArrayLengthMismatch();
-        }
+        require(length == value.length && length == func.length, PolicyAccount__ArrayLengthMismatch());
 
         for (uint256 i = 0; i < length; ++i) {
-            if (dest[i] == address(0)) {
-                revert PolicyAccount__ZeroAddressNotAllowed();
-            }
+            require(dest[i] != address(0), PolicyAccount__ZeroAddressNotAllowed());
 
             (bool success, bytes memory result) = dest[i].call{value: value[i]}(func[i]);
-            if (!success) {
-                revert PolicyAccount__CallFailed(result);
-            }
+            require(success, PolicyAccount__CallFailed(result));
         }
 
         emit BatchExecutionSuccess(length);
