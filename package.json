@@ -2,18 +2,36 @@
   "name": "cifra-ruble-policy-account",
   "version": "1.0.0",
   "description": "ERC-4337 Smart Account wallet requiring AI-Oracle cryptographic ECDSA approval",
+  "exports": {
+    "./userOp": {
+      "types": "./src/userOp.ts",
+      "import": "./src/userOp.ts",
+      "default": "./src/userOp.ts"
+    },
+    "./oracle": {
+      "types": "./src/oracle/receiptParser.ts",
+      "import": "./src/oracle/receiptParser.ts",
+      "default": "./src/oracle/receiptParser.ts"
+    },
+    "./abi": {
+      "types": "./src/abi/policyAccountAbi.ts",
+      "import": "./src/abi/policyAccountAbi.ts",
+      "default": "./src/abi/policyAccountAbi.ts"
+    }
+  },
   "scripts": {
-    "build": "forge build",
+    "build": "forge build && npm run build:abi",
+    "build:abi": "tsx script/generateAbi.ts",
     "test": "forge test",
     "test:unit": "tsx test/unit/receiptParser.test.ts",
     "test:ai": "tsx test/manual/parseRealReceipt.ts",
     "test:e2e": "tsx test/e2e/userOpSuccess.test.ts",
     "typecheck": "tsc --noEmit",
     "lint:sol": "solhint 'src/**/*.sol' 'test/**/*.sol' 'script/**/*.sol'",
-    "lint:ts": "eslint 'src/**/*.ts' 'test/**/*.ts'",
+    "lint:ts": "eslint 'src/**/*.ts' 'test/**/*.ts' 'script/**/*.ts'",
     "lint": "npm run lint:sol && npm run lint:ts && npm run typecheck",
     "lint:all": "npm run lint:sol && npm run lint:ts && npm run typecheck",
-    "lint:fix": "solhint --fix --noPrompt 'src/**/*.sol' 'script/**/*.sol' && eslint --fix 'src/**/*.ts' 'test/**/*.ts'",
+    "lint:fix": "solhint --fix --noPrompt 'src/**/*.sol' 'script/**/*.sol' && eslint --fix 'src/**/*.ts' 'test/**/*.ts' 'script/**/*.ts'",
     "format": "forge fmt",
     "format:check": "forge fmt --check"
   },
