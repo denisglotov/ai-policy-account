@@ -1,0 +1,87 @@
+{
+  "items": [
+    {
+      "title": "Томаты",
+      "price": 40.45,
+      "category": "fresh_produce"
+    },
+    {
+      "title": "Молоко Сибиская Милена",
+      "price": 19.9,
+      "category": "staple_food"
+    },
+    {
+      "title": "Соль Илецкая поваренна",
+      "price": 9,
+      "category": "staple_food"
+    },
+    {
+      "title": "Колбаса вареная Молочн",
+      "price": 81.5,
+      "category": "staple_food"
+    },
+    {
+      "title": "Сметана Снеда 15%",
+      "price": 45.5,
+      "category": "staple_food"
+    },
+    {
+      "title": "Масло сладко-сливочное",
+      "price": 35,
+      "category": "staple_food"
+    },
+    {
+      "title": "Ряженка Для всей семьи",
+      "price": 22,
+      "category": "staple_food"
+    },
+    {
+      "title": "Цикорий Цикорич с экст",
+      "price": 46,
+      "category": "drinks"
+    },
+    {
+      "title": "Говядина тушеная",
+      "price": 44.9,
+      "category": "staple_food"
+    },
+    {
+      "title": "Сахар песок 1кг",
+      "price": 30.9,
+      "category": "staple_food"
+    },
+    {
+      "title": "Бананы Эквадор",
+      "price": 20.62,
+      "category": "fresh_produce"
+    },
+    {
+      "title": "Макаронные изделия Гра",
+      "price": 15.9,
+      "category": "staple_food"
+    },
+    {
+      "title": "Сыр Гауда 48%",
+      "price": 43.38,
+      "category": "staple_food"
+    },
+    {
+      "title": "Печенье Овсяное Новое",
+      "price": 45,
+      "category": "junk_food"
+    },
+    {
+      "title": "Хлеб Урицкий нарезка",
+      "price": 25.5,
+      "category": "staple_food"
+    },
+    {
+      "title": "Рис Акмаржан круглозер",
+      "price": 27.9,
+      "category": "staple_food"
+    }
+  ],
+  "evm_wallets": [
+    "0x9793Dd93D46F153a2A879165cd163A01b54d8A00"
+  ]
+}

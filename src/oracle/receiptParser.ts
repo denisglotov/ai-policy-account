@@ -1,4 +1,12 @@
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import OpenAI from "openai";
 
@@ -28,14 +36,127 @@ export interface ParsedReceipt {
 
 export interface LLMCredentials {
   apiKey: string;
+  model: string;
   baseURL?: string;
-  model?: string;
   /**
    * Set to false to disable sending `response_format: { type: "json_object" }`.
    * If omitted, parseReceipt will attempt json_object and automatically retry
    * without it if the provider/model rejects structured outputs.
    */
   jsonMode?: boolean;
+  /**
+   * Set to true to bypass cache lookup and force a fresh LLM call.
+   */
+  noCache?: boolean;
+}
+
+const inMemoryReceiptCache = new Map<string, ParsedReceipt>();
+const CACHE_DIR = path.resolve(process.cwd(), "cache-receipts");
+
+/**
+ * Computes a deterministic SHA-256 cache key based on receipt text, model, and prompt.
+ */
+export function computeReceiptCacheKey(
+  receiptText: string,
+  model: string,
+  systemPrompt?: string,
+): string {
+  const prompt = systemPrompt ?? getDefaultReceiptSystemPrompt();
+  return createHash("sha256")
+    .update(`${receiptText.trim()}::${model}::${prompt}`)
+    .digest("hex");
+}
+
+/**
+ * Checks if a parsed result for the given receipt is already in memory or on disk.
+ */
+export function isReceiptCached(
+  receiptText: string,
+  credentials?: Partial<LLMCredentials>,
+  systemPrompt?: string,
+): boolean {
+  if (credentials?.noCache) {
+    return false;
+  }
+
+  const model = credentials?.model || "";
+  const key = computeReceiptCacheKey(receiptText, model, systemPrompt);
+  if (inMemoryReceiptCache.has(key)) {
+    return true;
+  }
+  try {
+    const filePath = path.join(CACHE_DIR, `${key}.json`);
+    return existsSync(filePath);
+  } catch {
+    return false;
+  }
+}
+
+// Pre-populated example receipt cache keys to preserve on disk
+const PRESERVED_CACHE_KEYS = new Set([
+  "a738c3a15bc64b92f36f468d33f654f1b6fbc05fd039bd8f04e96001ac1133f6", // Example 1
+  "768d7d8203113092175afc581d76d05da5ba3c30c4dfdbc92fab4bb33617c508", // Example 2
+]);
+
+/**
+ * Clears the in-memory and dynamic on-disk receipt cache.
+ * Preserves pre-populated raw cache JSON files for example receipts.
+ */
+export function clearReceiptCache(): void {
+  inMemoryReceiptCache.clear();
+  try {
+    if (existsSync(CACHE_DIR)) {
+      const files = readdirSync(CACHE_DIR);
+      for (const file of files) {
+        const key = path.basename(file, ".json");
+        if (file.endsWith(".json") && !PRESERVED_CACHE_KEYS.has(key)) {
+          unlinkSync(path.join(CACHE_DIR, file));
+        }
+      }
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
+/**
+ * Returns the number of items stored in the in-memory cache.
+ */
+export function getReceiptCacheSize(): number {
+  return inMemoryReceiptCache.size;
+}
+
+function getCachedReceipt(key: string): ParsedReceipt | null {
+  const mem = inMemoryReceiptCache.get(key);
+  if (mem) {
+    return JSON.parse(JSON.stringify(mem)) as ParsedReceipt;
+  }
+
+  try {
+    const filePath = path.join(CACHE_DIR, `${key}.json`);
+    if (existsSync(filePath)) {
+      const data = JSON.parse(readFileSync(filePath, "utf-8")) as ParsedReceipt;
+      inMemoryReceiptCache.set(key, data);
+      return data;
+    }
+  } catch {
+    // Ignore read errors
+  }
+
+  return null;
+}
+
+function setCachedReceipt(key: string, data: ParsedReceipt): void {
+  inMemoryReceiptCache.set(key, data);
+  try {
+    if (!existsSync(CACHE_DIR)) {
+      mkdirSync(CACHE_DIR, { recursive: true });
+    }
+    const filePath = path.join(CACHE_DIR, `${key}.json`);
+    writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+  } catch {
+    // Ignore disk write errors
+  }
 }
 
 let cachedDefaultPrompt: string | null = null;
@@ -179,18 +300,26 @@ export async function parseReceipt(
   credentials: LLMCredentials,
   systemPrompt: string = getDefaultReceiptSystemPrompt(),
 ): Promise<ParsedReceipt> {
-  if (!credentials || !credentials.apiKey) {
+  if (!credentials || !credentials.apiKey || !credentials.model) {
     throw new Error(
-      "Missing required LLM credentials: apiKey must be provided",
+      "Missing required LLM credentials: both apiKey and model must be provided",
     );
+  }
+
+  const model = credentials.model;
+  const cacheKey = computeReceiptCacheKey(receiptText, model, systemPrompt);
+
+  if (!credentials.noCache) {
+    const cached = getCachedReceipt(cacheKey);
+    if (cached) {
+      return cached;
+    }
   }
 
   const client = new OpenAI({
     apiKey: credentials.apiKey,
     baseURL: credentials.baseURL,
   });
-
-  const model = credentials.model || "gpt-4o-mini";
 
   const requestParams: OpenAI.ChatCompletionCreateParamsNonStreaming = {
     model,
@@ -233,5 +362,11 @@ export async function parseReceipt(
     throw new Error("Empty response received from LLM model");
   }
 
-  return cleanAndParseReceiptJson(content);
+  const parsed = cleanAndParseReceiptJson(content);
+
+  if (!credentials?.noCache) {
+    setCachedReceipt(cacheKey, parsed);
+  }
+
+  return parsed;
 }

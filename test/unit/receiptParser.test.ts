@@ -4,7 +4,9 @@ import {
   DEFAULT_RECEIPT_SYSTEM_PROMPT,
   RECEIPT_CATEGORIES,
   cleanAndParseReceiptJson,
+  clearReceiptCache,
   getDefaultReceiptSystemPrompt,
+  isReceiptCached,
   parseReceipt,
 } from "../../src/oracle/receiptParser.js";
 
@@ -91,9 +93,18 @@ test("cleanAndParseReceiptJson throws error on completely invalid JSON", () => {
   );
 });
 
-test("parseReceipt throws when apiKey is missing", async () => {
+test("parseReceipt throws when apiKey or model is missing", async () => {
   await assert.rejects(
-    () => parseReceipt("receipt text", { apiKey: "" }),
+    () => parseReceipt("receipt text", { apiKey: "", model: "test-model" }),
+    /Missing required LLM credentials/
+  );
+  await assert.rejects(
+    () => parseReceipt("receipt text", { apiKey: "key", model: "" }),
+    /Missing required LLM credentials/
+  );
+  await assert.rejects(
+    // @ts-expect-error testing missing model parameter
+    () => parseReceipt("receipt text", { apiKey: "key" }),
     /Missing required LLM credentials/
   );
 });
@@ -136,6 +147,7 @@ test("parseReceipt properly configures OpenAI call and returns parsed result", a
     const result = await parseReceipt(receiptText, {
       apiKey: "test-fake-key",
       model: "gpt-4o",
+      noCache: true,
     });
 
     assert.strictEqual(capturedModel, "gpt-4o");
@@ -158,7 +170,7 @@ test("parseReceipt properly configures OpenAI call and returns parsed result", a
   }
 });
 
-test("parseReceipt uses default model gpt-4o-mini if model omitted", async () => {
+test("parseReceipt properly uses the explicitly provided model", async () => {
   let capturedModel = "";
   const originalFetch = globalThis.fetch;
 
@@ -184,8 +196,12 @@ test("parseReceipt uses default model gpt-4o-mini if model omitted", async () =>
   }) as typeof globalThis.fetch;
 
   try {
-    await parseReceipt("empty receipt", { apiKey: "test-fake-key" });
-    assert.strictEqual(capturedModel, "gpt-4o-mini");
+    await parseReceipt("empty receipt", {
+      apiKey: "test-fake-key",
+      model: "custom-llm-model-v1",
+      noCache: true,
+    });
+    assert.strictEqual(capturedModel, "custom-llm-model-v1");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -265,9 +281,11 @@ test("parseReceipt respects jsonMode: false and does not send response_format", 
   }) as typeof globalThis.fetch;
 
   try {
-    await parseReceipt("receipt text", {
+    await parseReceipt("receipt text for jsonMode false test", {
       apiKey: "test-fake-key",
+      model: "test-model",
       jsonMode: false,
+      noCache: true,
     });
     assert.strictEqual(capturedResponseFormat, undefined);
   } finally {
@@ -322,7 +340,11 @@ test("parseReceipt automatically retries without response_format if provider rej
   }) as typeof globalThis.fetch;
 
   try {
-    const result = await parseReceipt("receipt text", { apiKey: "test-fake-key" });
+    const result = await parseReceipt("receipt text for retry test", {
+      apiKey: "test-fake-key",
+      model: "test-model",
+      noCache: true,
+    });
     assert.strictEqual(callCount, 2);
     // First call had response_format
     assert.deepStrictEqual(requests[0]?.response_format, { type: "json_object" });
@@ -334,4 +356,134 @@ test("parseReceipt automatically retries without response_format if provider rej
     globalThis.fetch = originalFetch;
   }
 });
+
+test("parseReceipt caches results and reuses them without making repeated API calls", async () => {
+  clearReceiptCache();
+  let fetchCallCount = 0;
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async () => {
+    fetchCallCount++;
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                items: [{ title: "Хлеб Бородинский", price: 30.0, category: "staple_food" }],
+                evm_wallets: ["0x9793Dd93D46F153a2A879165cd163A01b54d8A00"],
+              }),
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }) as typeof globalThis.fetch;
+
+  try {
+    const receipt = "UNIQUE_CACHE_RECEIPT_TEXT_TEST_SUITE_123";
+    clearReceiptCache();
+    assert.strictEqual(isReceiptCached(receipt, { model: "test-model" }), false);
+
+    // Call 1: should fetch from LLM
+    const res1 = await parseReceipt(receipt, { apiKey: "test-key", model: "test-model" });
+    assert.strictEqual(fetchCallCount, 1);
+    assert.strictEqual(res1.items[0]?.title, "Хлеб Бородинский");
+    assert.strictEqual(isReceiptCached(receipt, { model: "test-model" }), true);
+
+    // Call 2: should be returned directly from cache (fetchCallCount stays 1)
+    const res2 = await parseReceipt(receipt, { apiKey: "test-key", model: "test-model" });
+    assert.strictEqual(fetchCallCount, 1);
+    assert.deepStrictEqual(res2, res1);
+
+    // Call 3 with noCache: true should bypass cache and call fetch
+    const res3 = await parseReceipt(receipt, {
+      apiKey: "test-key",
+      model: "test-model",
+      noCache: true,
+    });
+    assert.strictEqual(fetchCallCount, 2);
+    assert.deepStrictEqual(res3, res1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearReceiptCache();
+  }
+});
+
+const EXAMPLE_RECEIPT_TEXT_1 = `*******************************
+Чек ПРОДАЖА № 9999.2.407.518
+Касса № 2
+15.08.2012 18:57:22
+---------------------------------------------
+1  Томаты 50+                    31.90x1.268=40.45
+2  Молоко Сибиская Милена                   =19.90
+3  Соль Илецкая поваренна                    =9.00
+4  Колбаса вареная Молочн                   =81.50
+5  Сметана Снеда 15% п/п                    =45.50
+6  Масло сладко-сливочное                   =35.00
+7  Ряженка Для всей семьи                   =22.00
+8  Цикорий Цикорич с экст                   =46.00
+9  Говядина тушеная в/с ж                   =44.90
+10 Сахар песок п/п 1кг                      =30.90
+11 Бананы Эквадор                38.90x0.530=20.62
+12 Макаронные изделия Гра                   =15.90
+13 Сыр Гауда 48 %               199.00x0.218=43.38
+14 Печенье Овсяное Новое                    =45.00
+15 Хлеб Урицкий нарезка п                   =25.50
+16 Рис Акмаржан круглозер                   =27.90
+---------------------------------------------
+ИТОГО без скидок:                           553.45
+Итого скидок:                                 0.45
+ИТОГО с учетом скидок:                      553.00
+ВНЕСЕНО:                                    555.00
+СДАЧА:                                        2.00
+Наличные:                                   553.00
+
+            СПАСИБО ЗА ПОКУПКУ!
+
+ИТОГ                                      =553.00
+НАЛИЧНЫМИ                                 =553.00
+#2747 ДОК. 00123706             К30 15-08-12 18:57
+4ККМ с ФП 0002043                  ИНН 0066741211794
+  00021505 #022698                 ЭКЛЗ 1426838547
+  
+  0x9793Dd93D46F153a2A879165cd163A01b54d8A00`;
+
+test("isReceiptCached and parseReceipt reuse raw JSONs in cache for example receipts", async () => {
+  const model = "inclusionai/ling-3.0-flash-vl:free";
+
+  // Receipt 1 is cached out-of-the-box via the raw JSON in cache/receipts/
+  assert.strictEqual(isReceiptCached(EXAMPLE_RECEIPT_TEXT_1, { model }), true);
+
+  // noCache: true bypasses
+  assert.strictEqual(
+    isReceiptCached(EXAMPLE_RECEIPT_TEXT_1, { model, noCache: true }),
+    false,
+  );
+
+  let fetchCallCount = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    fetchCallCount++;
+    throw new Error("fetch should not be called when served from raw cache JSON");
+  }) as typeof globalThis.fetch;
+
+  try {
+    const res = await parseReceipt(EXAMPLE_RECEIPT_TEXT_1, {
+      apiKey: "dummy-key",
+      model,
+    });
+    assert.strictEqual(fetchCallCount, 0);
+    assert.strictEqual(res.items.length, 16);
+    assert.deepStrictEqual(res.evm_wallets, [
+      "0x9793Dd93D46F153a2A879165cd163A01b54d8A00",
+    ]);
+    const sum = res.items.reduce((s, it) => s + it.price, 0);
+    assert.strictEqual(Number(sum.toFixed(2)), 553.45);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 

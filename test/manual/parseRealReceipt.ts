@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { parseReceipt } from "../../src/oracle/receiptParser.js";
+import {
+  isReceiptCached,
+  parseReceipt,
+} from "../../src/oracle/receiptParser.js";
 
 // Try loading .env natively (Node.js 20.6+)
 try {
@@ -20,23 +23,29 @@ async function runTestAi(): Promise<void> {
     console.error(
       "❌ OPENROUTER_API_KEY is not set.\n" +
         "Please provide an API key by setting OPENROUTER_API_KEY in your environment or in .env:\n" +
-        "  OPENROUTER_API_KEY=sk-or-v1-... npm run test:ai\n",
+        "  OPENROUTER_API_KEY=sk-or-v1-... npm run test:ai -- <RECEIPT_URL>\n",
     );
     process.exit(1);
   }
 
   const args = process.argv.slice(2);
-  const receiptUrl = args.find(
-    (arg) => arg.startsWith("http://") || arg.startsWith("https://"),
+  const noCache = args.includes("--no-cache");
+
+  const receiptSource = args.find(
+    (arg, i) =>
+      !arg.startsWith("-") &&
+      args[i - 1] !== "-o" &&
+      args[i - 1] !== "--output",
   );
 
-  if (!receiptUrl) {
+  if (!receiptSource) {
     console.error(
-      "❌ Receipt URL is required.\n" +
+      "❌ Receipt URL or file path is required.\n\n" +
         "Usage:\n" +
-        "  npm run test:ai -- <RECEIPT_URL> [--output <path>]\n\n" +
-        "Example:\n" +
-        "  npm run test:ai -- \"https://gist.githubusercontent.com/.../receipt.txt\"\n",
+        "  npm run test:ai -- <RECEIPT_URL_OR_FILE> [--output <path>] [--no-cache]\n\n" +
+        "Examples:\n" +
+        '  npm run test:ai -- "https://example.com/receipt.txt"\n' +
+        '  npm run test:ai -- ./receipt.txt\n',
     );
     process.exit(1);
   }
@@ -53,23 +62,44 @@ async function runTestAi(): Promise<void> {
     "==================================================================",
   );
   console.log("Running AI receipt parsing test against OpenRouter");
-  console.log(`Receipt URL: ${receiptUrl}`);
-  console.log(`Endpoint:    ${OPENROUTER_BASE_URL}`);
-  console.log(`Model:       ${OPENROUTER_MODEL}`);
-  console.log(`Output File: ${outputFile}`);
+  console.log(`Receipt Source: ${receiptSource}`);
+  console.log(`Endpoint:       ${OPENROUTER_BASE_URL}`);
+  console.log(`Model:          ${OPENROUTER_MODEL}`);
+  console.log(`Output File:    ${outputFile}`);
+  console.log(`Bypass Cache:   ${noCache ? "YES (--no-cache)" : "NO"}`);
   console.log(
     "==================================================================\n",
   );
 
-  console.log(`Fetching receipt text from: ${receiptUrl}...`);
-  const response = await fetch(receiptUrl);
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch receipt from ${receiptUrl}: ${response.status} ${response.statusText}`,
+  let receiptText: string;
+  const isUrl =
+    receiptSource.startsWith("http://") || receiptSource.startsWith("https://");
+
+  if (isUrl) {
+    console.log(`Fetching receipt text from: ${receiptSource}...`);
+    const response = await fetch(receiptSource);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch receipt from ${receiptSource}: ${response.status} ${response.statusText}`,
+      );
+    }
+    receiptText = await response.text();
+    console.log(`Fetched receipt (${receiptText.length} characters).`);
+  } else {
+    const resolvedPath = path.resolve(receiptSource);
+    if (!fs.existsSync(resolvedPath)) {
+      throw new Error(`Receipt file does not exist: ${resolvedPath}`);
+    }
+    receiptText = fs.readFileSync(resolvedPath, "utf-8");
+    console.log(
+      `Loaded receipt file (${receiptText.length} characters) from ${resolvedPath}.`,
     );
   }
-  const receiptText = await response.text();
-  console.log(`Fetched receipt (${receiptText.length} characters).\n`);
+
+  const wasCachedBefore = !noCache && isReceiptCached(receiptText, { model: OPENROUTER_MODEL });
+  console.log(
+    `Cache Status:  ${wasCachedBefore ? "HIT (served from cache ⚡)" : "MISS (executing LLM inference)"}\n`,
+  );
 
   const startTime = Date.now();
 
@@ -78,6 +108,7 @@ async function runTestAi(): Promise<void> {
     baseURL: OPENROUTER_BASE_URL,
     model: OPENROUTER_MODEL,
     jsonMode: false,
+    noCache,
   });
 
   const durationMs = Date.now() - startTime;

@@ -1,0 +1,87 @@
+{
+  "items": [
+    {
+      "title": "Пакет ЛЕНТА майка 9кг",
+      "price": 10.98,
+      "category": "other"
+    },
+    {
+      "title": "Пачка СТИКИ ТАБАЧНЫЕ",
+      "price": 420,
+      "category": "tobacco"
+    },
+    {
+      "title": "Картофель Эконом вес",
+      "price": 120.44,
+      "category": "fresh_produce"
+    },
+    {
+      "title": "Капуста китайская",
+      "price": 104.57,
+      "category": "fresh_produce"
+    },
+    {
+      "title": "Мандарины вес 1кг",
+      "price": 123.66,
+      "category": "fresh_produce"
+    },
+    {
+      "title": "Пиво GOSSER светлое",
+      "price": 134.67,
+      "category": "alcohol"
+    },
+    {
+      "title": "Кетчуп МАХЕЕВЪ Томатный",
+      "price": 66.89,
+      "category": "staple_food"
+    },
+    {
+      "title": "Джин FOXBRIDGE Фоксбридж",
+      "price": 429.99,
+      "category": "alcohol"
+    },
+    {
+      "title": "Масло СЫРОБОГАТОВ сливочное",
+      "price": 117.99,
+      "category": "staple_food"
+    },
+    {
+      "title": "Сельдь МЕРИДИАН филе",
+      "price": 169.99,
+      "category": "staple_food"
+    },
+    {
+      "title": "Батон ХЗ №22 Подмосковский",
+      "price": 35.99,
+      "category": "staple_food"
+    },
+    {
+      "title": "Крабовые палочки АМОР",
+      "price": 59.99,
+      "category": "staple_food"
+    },
+    {
+      "title": "Зефир СЕМЕЙКА ОЗБИ",
+      "price": 75.04,
+      "category": "junk_food"
+    },
+    {
+      "title": "Изделие слоеное ЛЕНТА",
+      "price": 99.99,
+      "category": "junk_food"
+    },
+    {
+      "title": "Сыр ЛАМБЕР Гауда 45%",
+      "price": 129.89,
+      "category": "staple_food"
+    },
+    {
+      "title": "Наклейки MOOMIN",
+      "price": 0,
+      "category": "other"
+    }
+  ],
+  "evm_wallets": [
+    "0x9793Dd93D46F153a2A879165cd163A01b54d8A00"
+  ]
+}
