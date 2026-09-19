@@ -93,19 +93,19 @@ test("cleanAndParseReceiptJson throws error on completely invalid JSON", () => {
   );
 });
 
-test("parseReceipt throws when apiKey or model is missing", async () => {
+test("parseReceipt throws when apiKey is missing for uncached receipt or model is missing", async () => {
   await assert.rejects(
     () => parseReceipt("receipt text", { apiKey: "", model: "test-model" }),
-    /Missing required LLM credentials/
+    /Missing required/
   );
   await assert.rejects(
     () => parseReceipt("receipt text", { apiKey: "key", model: "" }),
-    /Missing required LLM credentials/
+    /Missing required/
   );
   await assert.rejects(
     // @ts-expect-error testing missing model parameter
     () => parseReceipt("receipt text", { apiKey: "key" }),
-    /Missing required LLM credentials/
+    /Missing required/
   );
 });
 
@@ -470,8 +470,8 @@ test("isReceiptCached and parseReceipt reuse raw JSONs in cache for example rece
   }) as typeof globalThis.fetch;
 
   try {
+    // Calling without apiKey succeeds because it resolves from cache
     const res = await parseReceipt(EXAMPLE_RECEIPT_TEXT_1, {
-      apiKey: "dummy-key",
       model,
     });
     assert.strictEqual(fetchCallCount, 0);

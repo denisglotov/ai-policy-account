@@ -19,15 +19,6 @@ const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 async function runTestAi(): Promise<void> {
   const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
 
-  if (!apiKey) {
-    console.error(
-      "❌ OPENROUTER_API_KEY is not set.\n" +
-        "Please provide an API key by setting OPENROUTER_API_KEY in your environment or in .env:\n" +
-        "  OPENROUTER_API_KEY=sk-or-v1-... npm run test:ai -- <RECEIPT_URL>\n",
-    );
-    process.exit(1);
-  }
-
   const args = process.argv.slice(2);
   const noCache = args.includes("--no-cache");
 
@@ -100,6 +91,15 @@ async function runTestAi(): Promise<void> {
   console.log(
     `Cache Status:  ${wasCachedBefore ? "HIT (served from cache ⚡)" : "MISS (executing LLM inference)"}\n`,
   );
+
+  if (!wasCachedBefore && !apiKey) {
+    console.error(
+      "❌ OPENROUTER_API_KEY is not set.\n" +
+        "Please provide an API key by setting OPENROUTER_API_KEY in your environment or in .env:\n" +
+        "  OPENROUTER_API_KEY=sk-or-v1-... npm run test:ai -- <RECEIPT_URL_OR_FILE>\n",
+    );
+    process.exit(1);
+  }
 
   const startTime = Date.now();
 

@@ -35,8 +35,8 @@ export interface ParsedReceipt {
 }
 
 export interface LLMCredentials {
-  apiKey: string;
   model: string;
+  apiKey?: string;
   baseURL?: string;
   /**
    * Set to false to disable sending `response_format: { type: "json_object" }`.
@@ -300,9 +300,9 @@ export async function parseReceipt(
   credentials: LLMCredentials,
   systemPrompt: string = getDefaultReceiptSystemPrompt(),
 ): Promise<ParsedReceipt> {
-  if (!credentials || !credentials.apiKey || !credentials.model) {
+  if (!credentials || !credentials.model) {
     throw new Error(
-      "Missing required LLM credentials: both apiKey and model must be provided",
+      "Missing required parameter: model must be provided",
     );
   }
 
@@ -314,6 +314,12 @@ export async function parseReceipt(
     if (cached) {
       return cached;
     }
+  }
+
+  if (!credentials.apiKey) {
+    throw new Error(
+      "Missing required LLM credentials: apiKey must be provided for uncached receipt inference",
+    );
   }
 
   const client = new OpenAI({
