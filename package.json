@@ -5,13 +5,15 @@
   "scripts": {
     "build": "forge build",
     "test": "forge test",
+    "test:unit": "tsx test/unit/receiptParser.test.ts",
+    "test:ai": "tsx test/manual/parseRealReceipt.ts",
     "test:e2e": "tsx test/e2e/userOpSuccess.test.ts",
     "typecheck": "tsc --noEmit",
     "lint:sol": "solhint 'src/**/*.sol' 'test/**/*.sol' 'script/**/*.sol'",
-    "lint:ts": "eslint 'test/**/*.ts'",
+    "lint:ts": "eslint 'src/**/*.ts' 'test/**/*.ts'",
     "lint": "npm run lint:sol && npm run lint:ts && npm run typecheck",
     "lint:all": "npm run lint:sol && npm run lint:ts && npm run typecheck",
-    "lint:fix": "solhint --fix --noPrompt 'src/**/*.sol' 'script/**/*.sol' && eslint --fix 'test/**/*.ts'",
+    "lint:fix": "solhint --fix --noPrompt 'src/**/*.sol' 'script/**/*.sol' && eslint --fix 'src/**/*.ts' 'test/**/*.ts'",
     "format": "forge fmt",
     "format:check": "forge fmt --check"
   },
@@ -28,5 +30,8 @@
     "typescript-eslint": "^8.70.0",
     "viem": "^2.23.12"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "openai": "^7.19.0"
+  }
 }
