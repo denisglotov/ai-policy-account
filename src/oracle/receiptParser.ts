@@ -1,14 +1,7 @@
-import { createHash } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
-import path from "node:path";
 import OpenAI from "openai";
+import { sha256, stringToBytes } from "viem";
+import example1Receipt from "../../cache-receipts/a738c3a15bc64b92f36f468d33f654f1b6fbc05fd039bd8f04e96001ac1133f6.json";
+import example2Receipt from "../../cache-receipts/768d7d8203113092175afc581d76d05da5ba3c30c4dfdbc92fab4bb33617c508.json";
 
 export const RECEIPT_CATEGORIES = [
   "staple_food",
@@ -40,7 +33,7 @@ export interface ParsedReceipt {
 export const MAX_RECEIPT_INPUT_SIZE_BYTES = 50 * 1024;
 
 /**
- * Returns the UTF-8 byte length of a string across Node.js and browser/React Native environments.
+ * Returns the UTF-8 byte length of a string across Node.js, browser, and React Native environments.
  */
 export function getReceiptByteLength(text: string): number {
   if (typeof Buffer !== "undefined" && typeof Buffer.byteLength === "function") {
@@ -63,10 +56,70 @@ export interface LLMCredentials {
    * Set to true to bypass cache lookup and force a fresh LLM call.
    */
   noCache?: boolean;
+  /**
+   * Set to true when running client-side (e.g. React Native / browser). Defaults to true.
+   */
+  dangerouslyAllowBrowser?: boolean;
 }
 
-const inMemoryReceiptCache = new Map<string, ParsedReceipt>();
-const CACHE_DIR = path.resolve(process.cwd(), "cache-receipts");
+export const DEFAULT_RECEIPT_SYSTEM_PROMPT = `You are a receipt parsing and classification engine. Your task is to process the entire raw text of a receipt, extract line items with their final prices, classify each product into strictly one of the allowed categories, and extract any EVM (Ethereum Virtual Machine) cryptocurrency wallet addresses found anywhere in the receipt text.
+
+### Allowed Categories:
+1. \`staple_food\`: Everyday essentials and staple groceries (meat, poultry, fish, dairy, flour, grains, pasta, sugar, salt, cooking oils, canned goods, basic bread, unsweetened bakery).
+2. \`fresh_produce\`: Fresh vegetables, leafy greens, fresh fruits, berries, raw mushrooms.
+3. \`junk_food\`: Snacks, chips, crisps, candy, chocolate, snack bars, cookies, biscuits, cakes, sweet pastries, desserts.
+4. \`drinks\`: Water (still/sparkling), 100% juices, fruit drinks, unsweetened plant milk, tea, coffee, chicory (loose, ground, or instant).
+5. \`unhealthy_drinks\`: Energy drinks, sugary sodas, sweetened bottled iced tea.
+6. \`alcohol\`: Beer, cider, wine, spirits, alcoholic cocktails, non-alcoholic beer/wine.
+7. \`tobacco\`: Cigarettes, heated tobacco sticks, vape liquids, disposable vapes, rolling tobacco, lighters.
+8. \`other\`: Non-food household items, bags, toiletries, service fees, taxes, or unidentifiable lines.
+
+### Parsing Rules:
+- Process the entire receipt text top-to-bottom. Ignore headers, footers, total sums, cash/card payment lines, and timestamps when extracting line items.
+- Extract only actual purchased items into the \`items\` array.
+- For each item, clean up receipt-specific abbreviations where possible (e.g., "п/п", "в/с ж", arithmetic operations) and store the readable product name in \`title\`.
+- Extract the final payable line total into \`price\` as a numeric float (e.g., from \`31.90x1.268=40.45\` or \`=19.90\`, extract \`40.45\` and \`19.90\`).
+- Scan the entire text for EVM wallet addresses: hexadecimal strings starting with \`0x\` followed by exactly 40 hexadecimal characters (case-insensitive regex pattern: \`0x[a-fA-F0-9]{40}\`).
+- Collect all unique EVM addresses found into the \`evm_wallets\` array. If none are found, return an empty array \`[]\`.
+- Output strictly valid JSON matching the schema below without markdown formatting or surrounding explanations.
+
+### Output JSON Schema:
+{
+  "items": [
+    {
+      "title": "Cleaned product title",
+      "price": 0.00,
+      "category": "one of the 8 category slugs"
+    }
+  ],
+  "evm_wallets": [
+    "0x..."
+  ]
+}`;
+
+/**
+ * Accessor function to get the default system prompt.
+ */
+export function getDefaultReceiptSystemPrompt(): string {
+  return DEFAULT_RECEIPT_SYSTEM_PROMPT;
+}
+
+/**
+ * Pre-seeded example receipt cache entries from raw JSON files.
+ */
+const PRESEEDED_CACHE_ITEMS: Record<string, ParsedReceipt> = {
+  "a738c3a15bc64b92f36f468d33f654f1b6fbc05fd039bd8f04e96001ac1133f6":
+    example1Receipt as ParsedReceipt,
+  "768d7d8203113092175afc581d76d05da5ba3c30c4dfdbc92fab4bb33617c508":
+    example2Receipt as ParsedReceipt,
+};
+
+const inMemoryReceiptCache = new Map<string, ParsedReceipt>(
+  Object.entries(PRESEEDED_CACHE_ITEMS).map(([k, v]) => [
+    k,
+    JSON.parse(JSON.stringify(v)) as ParsedReceipt,
+  ]),
+);
 
 /**
  * Computes a deterministic SHA-256 cache key based on receipt text, model, and prompt.
@@ -77,13 +130,13 @@ export function computeReceiptCacheKey(
   systemPrompt?: string,
 ): string {
   const prompt = systemPrompt ?? getDefaultReceiptSystemPrompt();
-  return createHash("sha256")
-    .update(`${receiptText.trim()}::${model}::${prompt}`)
-    .digest("hex");
+  return sha256(
+    stringToBytes(`${receiptText.trim()}::${model}::${prompt}`),
+  ).slice(2);
 }
 
 /**
- * Checks if a parsed result for the given receipt is already in memory or on disk.
+ * Checks if a parsed result for the given receipt is already in memory.
  */
 export function isReceiptCached(
   receiptText: string,
@@ -100,41 +153,19 @@ export function isReceiptCached(
 
   const model = credentials?.model || "";
   const key = computeReceiptCacheKey(receiptText, model, systemPrompt);
-  if (inMemoryReceiptCache.has(key)) {
-    return true;
-  }
-  try {
-    const filePath = path.join(CACHE_DIR, `${key}.json`);
-    return existsSync(filePath);
-  } catch {
-    return false;
-  }
+  return inMemoryReceiptCache.has(key);
 }
 
-// Pre-populated example receipt cache keys to preserve on disk
-const PRESERVED_CACHE_KEYS = new Set([
-  "a738c3a15bc64b92f36f468d33f654f1b6fbc05fd039bd8f04e96001ac1133f6", // Example 1
-  "768d7d8203113092175afc581d76d05da5ba3c30c4dfdbc92fab4bb33617c508", // Example 2
-]);
-
 /**
- * Clears the in-memory and dynamic on-disk receipt cache.
- * Preserves pre-populated raw cache JSON files for example receipts.
+ * Clears the in-memory cache, restoring the pre-seeded example receipts.
  */
 export function clearReceiptCache(): void {
   inMemoryReceiptCache.clear();
-  try {
-    if (existsSync(CACHE_DIR)) {
-      const files = readdirSync(CACHE_DIR);
-      for (const file of files) {
-        const key = path.basename(file, ".json");
-        if (file.endsWith(".json") && !PRESERVED_CACHE_KEYS.has(key)) {
-          unlinkSync(path.join(CACHE_DIR, file));
-        }
-      }
-    }
-  } catch {
-    // Ignore cleanup errors
+  for (const [key, val] of Object.entries(PRESEEDED_CACHE_ITEMS)) {
+    inMemoryReceiptCache.set(
+      key,
+      JSON.parse(JSON.stringify(val)) as ParsedReceipt,
+    );
   }
 }
 
@@ -150,49 +181,15 @@ function getCachedReceipt(key: string): ParsedReceipt | null {
   if (mem) {
     return JSON.parse(JSON.stringify(mem)) as ParsedReceipt;
   }
-
-  try {
-    const filePath = path.join(CACHE_DIR, `${key}.json`);
-    if (existsSync(filePath)) {
-      const data = JSON.parse(readFileSync(filePath, "utf-8")) as ParsedReceipt;
-      inMemoryReceiptCache.set(key, data);
-      return data;
-    }
-  } catch {
-    // Ignore read errors
-  }
-
   return null;
 }
 
 function setCachedReceipt(key: string, data: ParsedReceipt): void {
-  inMemoryReceiptCache.set(key, data);
-  try {
-    if (!existsSync(CACHE_DIR)) {
-      mkdirSync(CACHE_DIR, { recursive: true });
-    }
-    const filePath = path.join(CACHE_DIR, `${key}.json`);
-    writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
-  } catch {
-    // Ignore disk write errors
-  }
+  inMemoryReceiptCache.set(
+    key,
+    JSON.parse(JSON.stringify(data)) as ParsedReceipt,
+  );
 }
-
-let cachedDefaultPrompt: string | null = null;
-
-/**
- * Accessor function to get the default system prompt from default_receipt_system_prompt.txt.
- * Caches the prompt in memory after reading from disk.
- */
-export function getDefaultReceiptSystemPrompt(): string {
-  if (cachedDefaultPrompt === null) {
-    const promptPath = path.resolve(__dirname, "default_receipt_system_prompt.txt");
-    cachedDefaultPrompt = readFileSync(promptPath, "utf-8").trim();
-  }
-  return cachedDefaultPrompt;
-}
-
-export const DEFAULT_RECEIPT_SYSTEM_PROMPT = getDefaultReceiptSystemPrompt();
 
 const EVM_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 
@@ -240,13 +237,13 @@ export function cleanAndParseReceiptJson(rawJson: string): ParsedReceipt {
   }
 
   if (typeof parsed !== "object" || parsed === null) {
-    throw new Error("LLM response did not parse to a JSON object");
+    throw new Error("Parsed JSON root must be an object");
   }
 
-  const record = parsed as Record<string, unknown>;
-  const rawItems = Array.isArray(record.items) ? record.items : [];
-  const rawWallets = Array.isArray(record.evm_wallets)
-    ? record.evm_wallets
+  const parsedObj = parsed as Record<string, unknown>;
+  const rawItems = Array.isArray(parsedObj.items) ? parsedObj.items : [];
+  const rawWallets = Array.isArray(parsedObj.evm_wallets)
+    ? parsedObj.evm_wallets
     : [];
 
   const allowedCategoriesSet = new Set<string>(RECEIPT_CATEGORIES);
@@ -308,6 +305,7 @@ export function cleanAndParseReceiptJson(rawJson: string): ParsedReceipt {
 
 /**
  * Public function to parse cashier receipt text using an OpenAI-compatible LLM.
+ * Adapted for React Native, Node.js, and web browsers.
  *
  * @param receiptText - The raw text of the cashier receipt.
  * @param credentials - OpenAI-compatible credentials (apiKey, optional baseURL, optional model).
@@ -355,6 +353,7 @@ export async function parseReceipt(
   const client = new OpenAI({
     apiKey: credentials.apiKey,
     baseURL: credentials.baseURL,
+    dangerouslyAllowBrowser: credentials.dangerouslyAllowBrowser ?? true,
   });
 
   const requestParams: OpenAI.ChatCompletionCreateParamsNonStreaming = {

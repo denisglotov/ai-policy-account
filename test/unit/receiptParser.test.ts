@@ -2,15 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEFAULT_RECEIPT_SYSTEM_PROMPT,
+  MAX_RECEIPT_INPUT_SIZE_BYTES,
   RECEIPT_CATEGORIES,
   cleanAndParseReceiptJson,
   clearReceiptCache,
   getDefaultReceiptSystemPrompt,
+  getReceiptByteLength,
   isReceiptCached,
   parseReceipt,
 } from "../../src/oracle/receiptParser.js";
 
-test("getDefaultReceiptSystemPrompt returns non-empty prompt from txt file matching categories", () => {
+test("getDefaultReceiptSystemPrompt returns non-empty prompt matching categories", () => {
   const prompt = getDefaultReceiptSystemPrompt();
   assert.ok(prompt.length > 0);
   assert.strictEqual(prompt, DEFAULT_RECEIPT_SYSTEM_PROMPT);
@@ -106,6 +108,48 @@ test("parseReceipt throws when apiKey is missing for uncached receipt or model i
     // @ts-expect-error testing missing model parameter
     () => parseReceipt("receipt text", { apiKey: "key" }),
     /Missing required/
+  );
+});
+
+test("getReceiptByteLength accurately computes UTF-8 byte length", () => {
+  assert.strictEqual(getReceiptByteLength("hello"), 5);
+  // "Чек" has 3 Cyrillic characters = 6 bytes in UTF-8
+  assert.strictEqual(getReceiptByteLength("Чек"), 6);
+  assert.strictEqual(MAX_RECEIPT_INPUT_SIZE_BYTES, 50 * 1024);
+});
+
+test("parseReceipt and isReceiptCached enforce 50KB input limit", async () => {
+  const oversizedText = "x".repeat(MAX_RECEIPT_INPUT_SIZE_BYTES + 1);
+
+  // isReceiptCached should return false for oversized text without error
+  assert.strictEqual(
+    isReceiptCached(oversizedText, { model: "test-model" }),
+    false,
+  );
+
+  // parseReceipt should reject oversized input
+  await assert.rejects(
+    () =>
+      parseReceipt(oversizedText, {
+        apiKey: "test-key",
+        model: "test-model",
+      }),
+    /Receipt input size \(51201 bytes\) exceeds maximum allowed size of 50KB \(51200 bytes\)/,
+  );
+
+  // Cyrillic string exceeding 50KB (25,601 characters = 51,202 bytes)
+  const cyrillicOversized = "Ж".repeat(25601);
+  assert.strictEqual(
+    isReceiptCached(cyrillicOversized, { model: "test-model" }),
+    false,
+  );
+  await assert.rejects(
+    () =>
+      parseReceipt(cyrillicOversized, {
+        apiKey: "test-key",
+        model: "test-model",
+      }),
+    /Receipt input size \(51202 bytes\) exceeds maximum allowed size of 50KB \(51200 bytes\)/,
   );
 });
 
