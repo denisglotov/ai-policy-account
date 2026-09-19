@@ -34,6 +34,21 @@ export interface ParsedReceipt {
   evm_wallets: string[];
 }
 
+/**
+ * Maximum allowed size for raw receipt text input in bytes (50 KB).
+ */
+export const MAX_RECEIPT_INPUT_SIZE_BYTES = 50 * 1024;
+
+/**
+ * Returns the UTF-8 byte length of a string across Node.js and browser/React Native environments.
+ */
+export function getReceiptByteLength(text: string): number {
+  if (typeof Buffer !== "undefined" && typeof Buffer.byteLength === "function") {
+    return Buffer.byteLength(text, "utf8");
+  }
+  return new TextEncoder().encode(text).length;
+}
+
 export interface LLMCredentials {
   model: string;
   apiKey?: string;
@@ -75,7 +90,11 @@ export function isReceiptCached(
   credentials?: Partial<LLMCredentials>,
   systemPrompt?: string,
 ): boolean {
-  if (credentials?.noCache) {
+  if (
+    typeof receiptText !== "string" ||
+    getReceiptByteLength(receiptText) > MAX_RECEIPT_INPUT_SIZE_BYTES ||
+    credentials?.noCache
+  ) {
     return false;
   }
 
@@ -300,6 +319,17 @@ export async function parseReceipt(
   credentials: LLMCredentials,
   systemPrompt: string = getDefaultReceiptSystemPrompt(),
 ): Promise<ParsedReceipt> {
+  if (typeof receiptText !== "string") {
+    throw new Error("Invalid receiptText: expected string");
+  }
+
+  const inputSizeBytes = getReceiptByteLength(receiptText);
+  if (inputSizeBytes > MAX_RECEIPT_INPUT_SIZE_BYTES) {
+    throw new Error(
+      `Receipt input size (${inputSizeBytes} bytes) exceeds maximum allowed size of 50KB (${MAX_RECEIPT_INPUT_SIZE_BYTES} bytes)`,
+    );
+  }
+
   if (!credentials || !credentials.model) {
     throw new Error(
       "Missing required parameter: model must be provided",
