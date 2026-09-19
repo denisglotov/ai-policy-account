@@ -166,7 +166,7 @@ export function packDualSignature({
       { type: 'uint48' },
       { type: 'uint48' },
     ],
-    [ownerSig, oracleSig, receiptHash, validUntil, validAfter]
+    [ownerSig, oracleSig, receiptHash, validUntil, validAfter],
   );
 }
 
@@ -175,7 +175,7 @@ export function packDualSignature({
  * the fully prepared PackedUserOperation along with userOpHash.
  */
 export async function buildSignedUserOp(
-  params: ExecutePolicyTxParams
+  params: ExecutePolicyTxParams,
 ): Promise<SignedUserOpResult> {
   let callData = params.callData;
   if (!callData) {
@@ -190,8 +190,7 @@ export async function buildSignedUserOp(
     });
   }
 
-  const entryPointAddress =
-    params.entryPointAddress ?? CANONICAL_ENTRY_POINT_07_ADDRESS;
+  const entryPointAddress = params.entryPointAddress ?? CANONICAL_ENTRY_POINT_07_ADDRESS;
   const entryPointAbi = params.entryPointAbi ?? ENTRY_POINT_ABI;
 
   // Fetch current account nonce from EntryPoint
@@ -221,11 +220,7 @@ export async function buildSignedUserOp(
       ) {
         maxPriorityFeePerGas = fees.maxPriorityFeePerGas;
       }
-      if (
-        maxFeePerGas === undefined &&
-        fees.maxFeePerGas !== undefined &&
-        fees.maxFeePerGas > 0n
-      ) {
+      if (maxFeePerGas === undefined && fees.maxFeePerGas !== undefined && fees.maxFeePerGas > 0n) {
         maxFeePerGas = fees.maxFeePerGas;
       }
     } catch {
@@ -288,8 +283,7 @@ export async function buildSignedUserOp(
       }
     }
 
-    const chainId =
-      params.publicClient.chain?.id ?? (await params.publicClient.getChainId());
+    const chainId = params.publicClient.chain?.id ?? (await params.publicClient.getChainId());
 
     if (!params.oracle.oracleAccount.signTypedData) {
       throw new Error('oracleAccount must support signTypedData');
@@ -334,7 +328,7 @@ export async function buildSignedUserOp(
  * @returns Result containing transactionHash, transaction receipt, userOpHash, and execution success status.
  */
 export async function executePolicyTransaction(
-  params: ExecutePolicyTxParams
+  params: ExecutePolicyTxParams,
 ): Promise<ExecutePolicyTxResult> {
   const clientAccount = params.walletClient.account;
   if (!clientAccount) {
@@ -343,11 +337,9 @@ export async function executePolicyTransaction(
 
   const { packedUserOp, userOpHash } = await buildSignedUserOp(params);
 
-  const beneficiary =
-    params.beneficiary ?? clientAccount.address ?? params.ownerAccount.address;
+  const beneficiary = params.beneficiary ?? clientAccount.address ?? params.ownerAccount.address;
 
-  const entryPointAddress =
-    params.entryPointAddress ?? CANONICAL_ENTRY_POINT_07_ADDRESS;
+  const entryPointAddress = params.entryPointAddress ?? CANONICAL_ENTRY_POINT_07_ADDRESS;
   const entryPointAbi = params.entryPointAbi ?? ENTRY_POINT_ABI;
 
   const transactionHash = await params.walletClient.writeContract({

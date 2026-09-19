@@ -1,17 +1,17 @@
-import OpenAI from "openai";
-import { sha256, stringToBytes } from "viem";
-import example1Receipt from "../../cache-receipts/a738c3a15bc64b92f36f468d33f654f1b6fbc05fd039bd8f04e96001ac1133f6.json";
-import example2Receipt from "../../cache-receipts/768d7d8203113092175afc581d76d05da5ba3c30c4dfdbc92fab4bb33617c508.json";
+import OpenAI from 'openai';
+import { sha256, stringToBytes } from 'viem';
+import example1Receipt from '../../cache-receipts/a738c3a15bc64b92f36f468d33f654f1b6fbc05fd039bd8f04e96001ac1133f6.json';
+import example2Receipt from '../../cache-receipts/768d7d8203113092175afc581d76d05da5ba3c30c4dfdbc92fab4bb33617c508.json';
 
 export const RECEIPT_CATEGORIES = [
-  "staple_food",
-  "fresh_produce",
-  "junk_food",
-  "drinks",
-  "unhealthy_drinks",
-  "alcohol",
-  "tobacco",
-  "other",
+  'staple_food',
+  'fresh_produce',
+  'junk_food',
+  'drinks',
+  'unhealthy_drinks',
+  'alcohol',
+  'tobacco',
+  'other',
 ] as const;
 
 export type ReceiptCategory = (typeof RECEIPT_CATEGORIES)[number];
@@ -36,8 +36,8 @@ export const MAX_RECEIPT_INPUT_SIZE_BYTES = 50 * 1024;
  * Returns the UTF-8 byte length of a string across Node.js, browser, and React Native environments.
  */
 export function getReceiptByteLength(text: string): number {
-  if (typeof Buffer !== "undefined" && typeof Buffer.byteLength === "function") {
-    return Buffer.byteLength(text, "utf8");
+  if (typeof Buffer !== 'undefined' && typeof Buffer.byteLength === 'function') {
+    return Buffer.byteLength(text, 'utf8');
   }
   return new TextEncoder().encode(text).length;
 }
@@ -108,9 +108,9 @@ export function getDefaultReceiptSystemPrompt(): string {
  * Pre-seeded example receipt cache entries from raw JSON files.
  */
 const PRESEEDED_CACHE_ITEMS: Record<string, ParsedReceipt> = {
-  "a738c3a15bc64b92f36f468d33f654f1b6fbc05fd039bd8f04e96001ac1133f6":
+  a738c3a15bc64b92f36f468d33f654f1b6fbc05fd039bd8f04e96001ac1133f6:
     example1Receipt as ParsedReceipt,
-  "768d7d8203113092175afc581d76d05da5ba3c30c4dfdbc92fab4bb33617c508":
+  '768d7d8203113092175afc581d76d05da5ba3c30c4dfdbc92fab4bb33617c508':
     example2Receipt as ParsedReceipt,
 };
 
@@ -130,9 +130,7 @@ export function computeReceiptCacheKey(
   systemPrompt?: string,
 ): string {
   const prompt = systemPrompt ?? getDefaultReceiptSystemPrompt();
-  return sha256(
-    stringToBytes(`${receiptText.trim()}::${model}::${prompt}`),
-  ).slice(2);
+  return sha256(stringToBytes(`${receiptText.trim()}::${model}::${prompt}`)).slice(2);
 }
 
 /**
@@ -144,14 +142,14 @@ export function isReceiptCached(
   systemPrompt?: string,
 ): boolean {
   if (
-    typeof receiptText !== "string" ||
+    typeof receiptText !== 'string' ||
     getReceiptByteLength(receiptText) > MAX_RECEIPT_INPUT_SIZE_BYTES ||
     credentials?.noCache
   ) {
     return false;
   }
 
-  const model = credentials?.model || "";
+  const model = credentials?.model || '';
   const key = computeReceiptCacheKey(receiptText, model, systemPrompt);
   return inMemoryReceiptCache.has(key);
 }
@@ -162,10 +160,7 @@ export function isReceiptCached(
 export function clearReceiptCache(): void {
   inMemoryReceiptCache.clear();
   for (const [key, val] of Object.entries(PRESEEDED_CACHE_ITEMS)) {
-    inMemoryReceiptCache.set(
-      key,
-      JSON.parse(JSON.stringify(val)) as ParsedReceipt,
-    );
+    inMemoryReceiptCache.set(key, JSON.parse(JSON.stringify(val)) as ParsedReceipt);
   }
 }
 
@@ -185,25 +180,22 @@ function getCachedReceipt(key: string): ParsedReceipt | null {
 }
 
 function setCachedReceipt(key: string, data: ParsedReceipt): void {
-  inMemoryReceiptCache.set(
-    key,
-    JSON.parse(JSON.stringify(data)) as ParsedReceipt,
-  );
+  inMemoryReceiptCache.set(key, JSON.parse(JSON.stringify(data)) as ParsedReceipt);
 }
 
 const EVM_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 
 function isStructuredOutputsUnsupportedError(error: unknown): boolean {
   if (!error) return false;
-  const str = typeof error === "string" ? error : JSON.stringify(error);
-  const msg = error instanceof Error ? error.message : "";
+  const str = typeof error === 'string' ? error : JSON.stringify(error);
+  const msg = error instanceof Error ? error.message : '';
   return (
-    str.includes("structured-outputs") ||
-    str.includes("response_format") ||
-    str.includes("json_object") ||
-    str.includes("JSON mode is not supported") ||
-    msg.includes("structured-outputs") ||
-    msg.includes("response_format")
+    str.includes('structured-outputs') ||
+    str.includes('response_format') ||
+    str.includes('json_object') ||
+    str.includes('JSON mode is not supported') ||
+    msg.includes('structured-outputs') ||
+    msg.includes('response_format')
   );
 }
 
@@ -220,8 +212,8 @@ export function cleanAndParseReceiptJson(rawJson: string): ParsedReceipt {
   }
 
   // Find outermost JSON object
-  const startIdx = cleaned.indexOf("{");
-  const endIdx = cleaned.lastIndexOf("}");
+  const startIdx = cleaned.indexOf('{');
+  const endIdx = cleaned.lastIndexOf('}');
   if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
     cleaned = cleaned.substring(startIdx, endIdx + 1);
   }
@@ -236,49 +228,43 @@ export function cleanAndParseReceiptJson(rawJson: string): ParsedReceipt {
     );
   }
 
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new Error("Parsed JSON root must be an object");
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error('Parsed JSON root must be an object');
   }
 
   const parsedObj = parsed as Record<string, unknown>;
   const rawItems = Array.isArray(parsedObj.items) ? parsedObj.items : [];
-  const rawWallets = Array.isArray(parsedObj.evm_wallets)
-    ? parsedObj.evm_wallets
-    : [];
+  const rawWallets = Array.isArray(parsedObj.evm_wallets) ? parsedObj.evm_wallets : [];
 
   const allowedCategoriesSet = new Set<string>(RECEIPT_CATEGORIES);
 
   const items: ReceiptItem[] = rawItems.map((item) => {
-    if (typeof item !== "object" || item === null) {
+    if (typeof item !== 'object' || item === null) {
       return {
-        title: "Unknown Item",
+        title: 'Unknown Item',
         price: 0,
-        category: "other",
+        category: 'other',
       };
     }
 
     const itemRecord = item as Record<string, unknown>;
     const title =
-      typeof itemRecord.title === "string" && itemRecord.title.trim().length > 0
+      typeof itemRecord.title === 'string' && itemRecord.title.trim().length > 0
         ? itemRecord.title.trim()
-        : "Unknown Item";
+        : 'Unknown Item';
 
     let price = 0;
-    if (
-      typeof itemRecord.price === "number" &&
-      !Number.isNaN(itemRecord.price)
-    ) {
+    if (typeof itemRecord.price === 'number' && !Number.isNaN(itemRecord.price)) {
       price = itemRecord.price;
-    } else if (typeof itemRecord.price === "string") {
-      const parsedPrice = parseFloat(itemRecord.price.replace(/[^\d.-]/g, ""));
+    } else if (typeof itemRecord.price === 'string') {
+      const parsedPrice = parseFloat(itemRecord.price.replace(/[^\d.-]/g, ''));
       price = Number.isNaN(parsedPrice) ? 0 : parsedPrice;
     }
 
-    const categoryRaw =
-      typeof itemRecord.category === "string" ? itemRecord.category.trim() : "";
+    const categoryRaw = typeof itemRecord.category === 'string' ? itemRecord.category.trim() : '';
     const category: ReceiptCategory = allowedCategoriesSet.has(categoryRaw)
       ? (categoryRaw as ReceiptCategory)
-      : "other";
+      : 'other';
 
     return {
       title,
@@ -289,7 +275,7 @@ export function cleanAndParseReceiptJson(rawJson: string): ParsedReceipt {
 
   const walletSet = new Set<string>();
   for (const wallet of rawWallets) {
-    if (typeof wallet === "string") {
+    if (typeof wallet === 'string') {
       const trimmed = wallet.trim();
       if (EVM_ADDRESS_REGEX.test(trimmed)) {
         walletSet.add(trimmed);
@@ -317,8 +303,8 @@ export async function parseReceipt(
   credentials: LLMCredentials,
   systemPrompt: string = getDefaultReceiptSystemPrompt(),
 ): Promise<ParsedReceipt> {
-  if (typeof receiptText !== "string") {
-    throw new Error("Invalid receiptText: expected string");
+  if (typeof receiptText !== 'string') {
+    throw new Error('Invalid receiptText: expected string');
   }
 
   const inputSizeBytes = getReceiptByteLength(receiptText);
@@ -329,9 +315,7 @@ export async function parseReceipt(
   }
 
   if (!credentials || !credentials.model) {
-    throw new Error(
-      "Missing required parameter: model must be provided",
-    );
+    throw new Error('Missing required parameter: model must be provided');
   }
 
   const model = credentials.model;
@@ -346,7 +330,7 @@ export async function parseReceipt(
 
   if (!credentials.apiKey) {
     throw new Error(
-      "Missing required LLM credentials: apiKey must be provided for uncached receipt inference",
+      'Missing required LLM credentials: apiKey must be provided for uncached receipt inference',
     );
   }
 
@@ -361,18 +345,18 @@ export async function parseReceipt(
     temperature: 0,
     messages: [
       {
-        role: "system",
+        role: 'system',
         content: systemPrompt,
       },
       {
-        role: "user",
+        role: 'user',
         content: receiptText,
       },
     ],
   };
 
   if (credentials.jsonMode !== false) {
-    requestParams.response_format = { type: "json_object" };
+    requestParams.response_format = { type: 'json_object' };
   }
 
   let completion: OpenAI.ChatCompletion;
@@ -394,7 +378,7 @@ export async function parseReceipt(
 
   const content = completion.choices[0]?.message?.content;
   if (!content) {
-    throw new Error("Empty response received from LLM model");
+    throw new Error('Empty response received from LLM model');
   }
 
   const parsed = cleanAndParseReceiptJson(content);

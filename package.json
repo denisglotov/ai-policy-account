@@ -32,8 +32,12 @@
     "lint": "npm run lint:sol && npm run lint:ts && npm run typecheck",
     "lint:all": "npm run lint:sol && npm run lint:ts && npm run typecheck",
     "lint:fix": "solhint --fix --noPrompt 'src/**/*.sol' 'script/**/*.sol' && eslint --fix 'src/**/*.ts' 'test/**/*.ts' 'script/**/*.ts'",
-    "format": "forge fmt",
-    "format:check": "forge fmt --check"
+    "format:sol": "forge fmt",
+    "format:sol:check": "forge fmt --check",
+    "format:ts": "prettier --write 'src/**/*.ts' 'test/**/*.ts' 'script/**/*.ts'",
+    "format:ts:check": "prettier --check 'src/**/*.ts' 'test/**/*.ts' 'script/**/*.ts'",
+    "format": "npm run format:sol && npm run format:ts",
+    "format:check": "npm run format:sol:check && npm run format:ts:check"
   },
   "devDependencies": {
     "@account-abstraction/contracts": "^0.7.0",
@@ -42,6 +46,7 @@
     "@types/node": "^22.13.9",
     "eslint": "^10.10.0",
     "forge-std": "github:foundry-rs/forge-std#v1.16.2",
+    "prettier": "^3.9.8",
     "solhint": "^6.2.4",
     "tsx": "^4.19.3",
     "typescript": "^6.0.3",
